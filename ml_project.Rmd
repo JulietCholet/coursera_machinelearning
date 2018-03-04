@@ -1,8 +1,10 @@
 ---
-title: "coursera_machinelearning"
+title: "An example of machine learning with data from connected device"
 author: "JulietC"
 date: "3 mars 2018"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -145,6 +147,7 @@ Cross-validation :
 predict <- predict(modFit, myTesting, type = "class")
 confusionMatrix(myTesting$classe, predict)
 ```
+Accuracy of the model : 96.2%
 
 ##Test on test dataset
 
