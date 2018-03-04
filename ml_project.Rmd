@@ -1,0 +1,155 @@
+---
+title: "coursera_machinelearning"
+author: "JulietC"
+date: "3 mars 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir="D:/stats/machine_learning")
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(rattle)
+library( e1071)
+```
+
+## Synopsis
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+Source : http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. 
+
+
+## Summary of training dataset
+
+First, as usual I need to load my training dataset and my testing set. Secondly I am having a look at the training data frame dimensions and at the first variables.
+
+```{r}
+training<-read.csv("pml-training.csv", header=TRUE, sep=",",  na.strings=c("NA","#DIV/0!","") )
+testing<-read.csv("pml-testing.csv", header=TRUE, sep=",",  na.strings=c("NA","#DIV/0!","") )
+pitch_dumbbell<-testing$pitch_dumbbell
+dim(training)
+summary(training[,1:5])
+summary(training$classe)
+
+```
+
+Here we can see that my training dataset includes 19622 rows and 160 observations (variables). "Classe" includes 5 possibilities (A, B, C, D, E).
+
+#Preprocessing 
+
+##Cleaning datasets
+
+To clean data sets, I first remove variables which are clearly not predictors (names, ID (X), and variables with very small variances.
+```{r}
+nopred <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window")
+IDnopred <- which(colnames(training) %in% nopred)
+training<-training[, -IDnopred]
+
+zeroVarCol <- nearZeroVar(training)
+training <- training[,-zeroVarCol]
+testing<-testing[, -zeroVarCol]
+dim(training)
+
+```
+That left me a dataframe with 118 variables instead of 160.
+
+To reduce further the number of variables, I remove columns with a lot of NAs (I decide to set a threshold at 60% of NAs).
+
+```{r}
+naCol = NULL
+for(i in 1:length(training)) {
+    if( sum( is.na( training[, i] ) ) /nrow(training) >= .6) {
+      naCol<-rbind(naCol, i)
+      } 
+}
+
+training<-training[,-naCol]
+
+dim(training)
+
+```
+This way, I keep only 53 columns in my data frame.
+
+
+##Splitting training set
+
+Next I split my training set in 2, to create another test set (myTesting), that I will use to try my model before trying on the original testing set.
+
+```{r}
+set.seed(28)
+inTrain <- createDataPartition(training$classe, p=0.6, list=FALSE)
+myTraining <- training[inTrain, ]
+myTesting <- training[-inTrain, ]
+dim(myTraining); dim(myTesting)
+classe<-myTraining$classe
+```
+
+
+
+#Predicting
+
+## Selecting predictors
+
+I look at highly correlated variables, and I will include in my models only non-colinear ones.
+
+```{r}
+M<- abs(cor(myTraining[,-53]))
+diag(M)<-0
+HC<-which(M>0.8, arr.ind = TRUE)
+HCx =NULL
+j<-NULL
+for (i in 1:38) { 
+  j<-HC[i,2]
+ HCx<-rbind(HCx,colnames(myTraining[j]))
+}
+HC<-cbind(HC, HCx)
+pred<-1
+for (i in 2:38) { 
+  if(HC[i,1] %in% pred){ 
+  }else{
+    pred<-rbind(pred,HC[i,2])
+  }
+    
+}
+pred<-unique(pred)
+prednames <-NULL
+for (i in 1:13 ){ 
+  j<-as.numeric(pred[i,])
+  prednames<-rbind(prednames,colnames(myTraining[j]))
+}
+myTraining<-myTraining[, prednames]
+myTraining<-cbind(myTraining, classe)
+str(myTraining)
+
+
+testing<-testing[,which(colnames(testing) %in% colnames(myTraining))]
+```
+
+##Random forest model
+
+```{r}
+set.seed(28)
+modFit <- randomForest(classe~., data = myTraining)
+print(modFit)
+```
+
+Cross-validation :
+
+```{r}
+predict <- predict(modFit, myTesting, type = "class")
+confusionMatrix(myTesting$classe, predict)
+```
+
+##Test on test dataset
+
+```{r}
+testing<-cbind(testing,pitch_dumbbell)
+predict2 <- predict(modFit, testing)
+predict2
+```
